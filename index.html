@@ -36,11 +36,12 @@
     <p><label style="width: 350px; display:inline-block">Service worker count (k):  <span id="SERVICE_LANE_COUNT_K"></span>&nbsp;&nbsp;</label><input type="range" min="1" max="7" value="5" class="slider" id="SERVICE_LANE_COUNT_K_SLIDER"></p>
 </div>
 
-<div id="warning" style="color: red">
+
+<p><label><b>Calculated expected behavior</b></label></p>
+
+<div id="predictions">
 </div>
 <br>
-
-
 
 <button onclick="simulation.startSimulation()">Restart simulation</button>
 <button onclick="simulation.resetStats()">Reset stats</button>
@@ -167,6 +168,36 @@
         function getExpRandomExitPosition() {
             return BALL_FINAL_X_COORD + Math.floor(BALL_SPEED_PIXEL_PER_SECOND * randomExponential(1 / self.AVERAGE_SERVICE_TIME_W));
 
+        }
+
+        function factorial(n){
+            let answer = 1;
+            if (n == 0 || n == 1){
+                return answer;
+            }else{
+                for(var i = n; i >= 1; i--){
+                    answer = answer * i;
+                }
+                return answer;
+            }
+        }
+
+        this.getRho = function() {
+            return self.ARRIVAL_RATE_INTENSITY_LAMBDA*self.AVERAGE_SERVICE_TIME_W/self.SERVICE_LANE_COUNT_K;
+        }
+
+        /**
+         * https://en.wikipedia.org/wiki/M/M/c_queue#Stationary_analysis
+         */
+        this.erlangC = function() {
+            var rho=self.getRho();
+            var c=self.SERVICE_LANE_COUNT_K;
+            var sum = 0;
+            for(var k = 0; k <= c-1; k++){
+                sum+=Math.pow((c*rho),k)/factorial(k);
+            }
+
+            return 1/(1+(1-rho)*(factorial(c)/Math.pow(c*rho,c))*sum)
         }
 
         function generateNewBalls() {
@@ -314,6 +345,18 @@
             self.AVERAGE_SERVICE_TIME_W = parseInt(document.getElementById("AVERAGE_SERVICE_TIME_W_SLIDER").value)
             self.ARRIVAL_RATE_INTENSITY_LAMBDA = parseInt(document.getElementById("ARRIVAL_RATE_INTENSITY_LAMBDA_SLIDER").value);
             self.SERVICE_LANE_COUNT_K = parseInt(document.getElementById("SERVICE_LANE_COUNT_K_SLIDER").value);
+            if (self.ARRIVAL_RATE_INTENSITY_LAMBDA*self.AVERAGE_SERVICE_TIME_W>=self.SERVICE_LANE_COUNT_K) {
+                document.getElementById("predictions").innerHTML="WARNING: Arrival rate intensity is too high, queue length may grow indefinitely!"
+            } else {
+                document.getElementById("predictions").innerHTML =`
+ After a long time (the system has reached a stationary random distribution), then:
+ <br>The probability that an arriving customer is forced to join the queue (all servers are occupied) = ${Math.round(100*self.erlangC())} %
+ <br>The average number of customers in queue = ${Math.round(100*self.getRho()*self.erlangC()/(1-self.getRho()))/100}
+ <br>The average number of customers in service = ${self.SERVICE_LANE_COUNT_K*self.getRho()}
+`
+            }
+
+
         }
 
 
@@ -361,11 +404,6 @@
                 slider.oninput = function() {
                     output.innerHTML = this.value;
                     self.updateSimulationParams();
-                    if (self.ARRIVAL_RATE_INTENSITY_LAMBDA*self.AVERAGE_SERVICE_TIME_W>self.SERVICE_LANE_COUNT_K) {
-                        document.getElementById("warning").innerHTML="WARNING: Arrival rate intensity is too high, queue length will grow indefinitely!"
-                    } else {
-                        document.getElementById("warning").innerHTML="";
-                    }
                 }
             });
 
